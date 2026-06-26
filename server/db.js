@@ -59,6 +59,35 @@ export async function initDb() {
   db.run(`CREATE INDEX IF NOT EXISTS idx_launch_browser ON launch_history(browser_id)`);
   db.run(`CREATE INDEX IF NOT EXISTS idx_launch_app ON launch_history(app_id)`);
 
+  db.run(`
+    CREATE TABLE IF NOT EXISTS favorites (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      app_id INTEGER NOT NULL,
+      browser_id TEXT NOT NULL,
+      created_at TEXT DEFAULT (datetime('now')),
+      FOREIGN KEY (app_id) REFERENCES apps(id) ON DELETE CASCADE,
+      UNIQUE(app_id, browser_id)
+    )
+  `);
+
+  db.run(`
+    CREATE TABLE IF NOT EXISTS category_icons (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      category TEXT NOT NULL UNIQUE,
+      icon TEXT NOT NULL DEFAULT '📁'
+    )
+  `);
+
+  const catCount = db.exec(`SELECT COUNT(*) as count FROM category_icons`);
+  if (!catCount[0] || catCount[0].values[0][0] === 0) {
+    const stmt = db.prepare(`INSERT INTO category_icons (category, icon) VALUES (?, ?)`);
+    stmt.run(['Engineering', '⚙️']);
+    stmt.run(['HR', '👥']);
+    stmt.run(['Sales', '💼']);
+    stmt.free();
+    saveDb();
+  }
+
   const adminRow = db.exec(`SELECT id FROM admin_config WHERE id = 1`);
   if (adminRow.length === 0) {
     const bcrypt = (await import('bcryptjs')).default;

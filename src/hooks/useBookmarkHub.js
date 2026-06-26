@@ -1,21 +1,48 @@
-import { useState, useMemo, useCallback } from 'react';
-import { initialApps, defaultCategoryIcons } from '../data/apps';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import { useLocalStorage } from './useLocalStorage';
-
-const MAX_RECENT = 10;
-const ADMIN_PIN = '1234';
+import { useAuth } from './useAuth';
+import { api } from '../api/client';
+import { getBrowserId } from '../utils/browserId';
 
 export function useBookmarkHub() {
-  const [apps, setApps] = useLocalStorage('bookmarkHub-apps', initialApps);
+  const { isAdmin, verifyAdmin, exitAdmin, changePin } = useAuth();
+  const [apps, setApps] = useState([]);
+  const [recentApps, setRecentApps] = useState([]);
+  const [favoriteIds, setFavoriteIds] = useState([]);
+  const [categoryIcons, setCategoryIcons] = useState({});
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
-  const [sortBy, setSortBy] = useState('name');
-  const [viewMode, setViewMode] = useState('grid');
+  const [sortBy, setSortBy] = useLocalStorage('bookmarkHub-sortBy', 'name');
+  const [viewMode, setViewMode] = useLocalStorage('bookmarkHub-viewMode', 'grid');
   const [darkMode, setDarkMode] = useLocalStorage('bookmarkHub-darkMode', false);
-  const [favorites, setFavorites] = useLocalStorage('bookmarkHub-favorites', []);
-  const [recentApps, setRecentApps] = useLocalStorage('bookmarkHub-recent', []);
-  const [isAdmin, setIsAdmin] = useLocalStorage('bookmarkHub-admin', false);
-  const [categoryIcons, setCategoryIcons] = useLocalStorage('bookmarkHub-categoryIcons', defaultCategoryIcons);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    getBrowserId();
+  }, []);
+
+  const loadAll = useCallback(async () => {
+    try {
+      const [fetchedApps, fetchedRecent, fetchedFavs, fetchedIcons] = await Promise.all([
+        api.getApps(),
+        api.getRecent(),
+        api.getFavorites(),
+        api.getCategoryIcons(),
+      ]);
+      setApps(fetchedApps);
+      setRecentApps(fetchedRecent.map(a => a.id));
+      setFavoriteIds(fetchedFavs.map(f => f.app_id));
+      setCategoryIcons(fetchedIcons);
+    } catch (err) {
+      console.error('Failed to load data:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadAll();
+  }, [loadAll]);
 
   const allCategories = useMemo(() => {
     const cats = [...new Set(apps.map(a => a.category))];
@@ -27,51 +54,74 @@ export function useBookmarkHub() {
     setDarkMode(prev => !prev);
   }, [setDarkMode]);
 
-  const verifyAdmin = useCallback((pin) => {
-    if (pin === ADMIN_PIN) {
-      setIsAdmin(true);
-      return true;
+  const toggleFavorite = useCallback(async (id) => {
+    const isFav = favoriteIds.includes(id);
+    try {
+      if (isFav) {
+        await api.removeFavorite(id);
+        setFavoriteIds(prev => prev.filter(fId => fId !== id));
+      } else {
+        await api.addFavorite(id);
+        setFavoriteIds(prev => [...prev, id]);
+      }
+    } catch (err) {
+      console.error('Failed to toggle favorite:', err);
     }
-    return false;
-  }, [setIsAdmin]);
+  }, [favoriteIds]);
 
-  const exitAdmin = useCallback(() => {
-    setIsAdmin(false);
-  }, [setIsAdmin]);
+  const launchApp = useCallback(async (id) => {
+    try {
+      await api.trackLaunch(id);
+      setRecentApps(prev => {
+        const filtered = prev.filter(rId => rId !== id);
+        return [id, ...filtered].slice(0, 10);
+      });
+    } catch (err) {
+      console.error('Failed to track launch:', err);
+    }
+  }, []);
 
-  const toggleFavorite = useCallback((id) => {
-    setFavorites(prev =>
-      prev.includes(id) ? prev.filter(fId => fId !== id) : [...prev, id]
-    );
-  }, [setFavorites]);
+  const addApp = useCallback(async (appData) => {
+    try {
+      const newApp = await api.createApp(appData);
+      setApps(prev => [...prev, newApp]);
+      await loadAll();
+    } catch (err) {
+      console.error('Failed to add app:', err);
+      throw err;
+    }
+  }, [loadAll]);
 
-  const launchApp = useCallback((id) => {
-    setRecentApps(prev => {
-      const filtered = prev.filter(rId => rId !== id);
-      return [id, ...filtered].slice(0, MAX_RECENT);
-    });
-  }, [setRecentApps]);
+  const updateApp = useCallback(async (id, appData) => {
+    try {
+      await api.updateApp(id, appData);
+      setApps(prev => prev.map(a => a.id === id ? { ...a, ...appData } : a));
+    } catch (err) {
+      console.error('Failed to update app:', err);
+      throw err;
+    }
+  }, []);
 
-  const addApp = useCallback((appData) => {
-    setApps(prev => {
-      const maxId = prev.reduce((max, a) => Math.max(max, a.id), 0);
-      return [...prev, { ...appData, id: maxId + 1 }];
-    });
-  }, [setApps]);
+  const deleteApp = useCallback(async (id) => {
+    try {
+      await api.deleteApp(id);
+      setApps(prev => prev.filter(a => a.id !== id));
+      setFavoriteIds(prev => prev.filter(fId => fId !== id));
+      setRecentApps(prev => prev.filter(rId => rId !== id));
+    } catch (err) {
+      console.error('Failed to delete app:', err);
+      throw err;
+    }
+  }, []);
 
-  const updateApp = useCallback((id, appData) => {
-    setApps(prev => prev.map(a => a.id === id ? { ...a, ...appData } : a));
-  }, [setApps]);
-
-  const deleteApp = useCallback((id) => {
-    setApps(prev => prev.filter(a => a.id !== id));
-    setFavorites(prev => prev.filter(fId => fId !== id));
-    setRecentApps(prev => prev.filter(rId => rId !== id));
-  }, [setApps, setFavorites, setRecentApps]);
-
-  const updateCategoryIcon = useCallback((category, icon) => {
-    setCategoryIcons(prev => ({ ...prev, [category]: icon }));
-  }, [setCategoryIcons]);
+  const updateCategoryIcon = useCallback(async (category, icon) => {
+    try {
+      await api.updateCategoryIcon(category, icon);
+      setCategoryIcons(prev => ({ ...prev, [category]: icon }));
+    } catch (err) {
+      console.error('Failed to update category icon:', err);
+    }
+  }, []);
 
   const filteredApps = useMemo(() => {
     let result = [...apps];
@@ -84,8 +134,8 @@ export function useBookmarkHub() {
       const q = searchQuery.toLowerCase();
       result = result.filter(app =>
         app.name.toLowerCase().includes(q) ||
-        app.desc.toLowerCase().includes(q) ||
-        app.keywords.toLowerCase().includes(q) ||
+        (app.description || '').toLowerCase().includes(q) ||
+        (app.keywords || '').toLowerCase().includes(q) ||
         app.category.toLowerCase().includes(q)
       );
     }
@@ -106,8 +156,6 @@ export function useBookmarkHub() {
           return aRank - bRank;
         });
         break;
-      default:
-        break;
     }
 
     return result;
@@ -124,7 +172,7 @@ export function useBookmarkHub() {
     setViewMode,
     darkMode,
     toggleDark,
-    favorites,
+    favorites: favoriteIds,
     toggleFavorite,
     recentApps,
     launchApp,
@@ -136,7 +184,9 @@ export function useBookmarkHub() {
     isAdmin,
     verifyAdmin,
     exitAdmin,
+    changePin,
     categoryIcons,
     updateCategoryIcon,
+    loading,
   };
 }

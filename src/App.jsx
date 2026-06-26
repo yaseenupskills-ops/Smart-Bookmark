@@ -10,6 +10,7 @@ import EmptyState from './components/EmptyState';
 import AppModal from './components/AppModal';
 import DeleteConfirm from './components/DeleteConfirm';
 import AdminPinModal from './components/AdminPinModal';
+import ChangePinModal from './components/ChangePinModal';
 import CategoryIconSettings from './components/CategoryIconSettings';
 
 export default function App() {
@@ -23,7 +24,7 @@ export default function App() {
     recentApps, launchApp,
     filteredApps, allCategories,
     addApp, updateApp, deleteApp,
-    isAdmin, verifyAdmin, exitAdmin,
+    isAdmin, verifyAdmin, exitAdmin, changePin,
     categoryIcons, updateCategoryIcon,
   } = useBookmarkHub();
 
@@ -32,6 +33,7 @@ export default function App() {
   const [deletingApp, setDeletingApp] = useState(null);
   const [pinModalOpen, setPinModalOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [changePinOpen, setChangePinOpen] = useState(false);
 
   const handleAdd = () => {
     setEditingApp(null);
@@ -43,11 +45,11 @@ export default function App() {
     setModalOpen(true);
   };
 
-  const handleSave = (data) => {
+  const handleSave = async (data) => {
     if (editingApp) {
-      updateApp(editingApp.id, data);
+      await updateApp(editingApp.id, data);
     } else {
-      addApp(data);
+      await addApp(data);
     }
   };
 
@@ -59,8 +61,12 @@ export default function App() {
     }
   };
 
-  const handlePinVerify = (pin) => {
+  const handlePinVerify = async (pin) => {
     return verifyAdmin(pin);
+  };
+
+  const handleChangePin = async (currentPin, newPin) => {
+    await changePin(currentPin, newPin);
   };
 
   return (
@@ -72,6 +78,7 @@ export default function App() {
         isAdmin={isAdmin}
         onAvatarClick={handleAvatarClick}
         onOpenSettings={() => setSettingsOpen(true)}
+        onChangePin={() => setChangePinOpen(true)}
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
       />
@@ -153,6 +160,12 @@ export default function App() {
         categoryIcons={categoryIcons}
         onUpdateCategoryIcon={updateCategoryIcon}
         allCategories={allCategories}
+      />
+
+      <ChangePinModal
+        isOpen={changePinOpen}
+        onClose={() => setChangePinOpen(false)}
+        onChangePin={handleChangePin}
       />
     </div>
   );

@@ -44,4 +44,9 @@ export const api = {
   trackLaunch: (id) => request('POST', `/api/apps/launch/${id}`),
   verifyAdmin: (pin) => request('POST', '/api/admin/verify', { pin }),
   changePin: (currentPin, newPin) => request('PUT', '/api/admin/change-pin', { currentPin, newPin }),
+  getFavorites: () => request('GET', '/api/favorites'),
+  addFavorite: (id) => request('POST', `/api/favorites/${id}`),
+  removeFavorite: (id) => request('DELETE', `/api/favorites/${id}`),
+  getCategoryIcons: () => request('GET', '/api/category-icons'),
+  updateCategoryIcon: (category, icon) => request('PUT', `/api/category-icons/${encodeURIComponent(category)}`, { icon }),
 };

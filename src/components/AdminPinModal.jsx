@@ -4,20 +4,29 @@ export default function AdminPinModal({ isOpen, onClose, onVerify }) {
   const [pin, setPin] = useState('');
   const [error, setError] = useState('');
   const [shake, setShake] = useState(false);
+  const [verifying, setVerifying] = useState(false);
 
   if (!isOpen) return null;
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    if (onVerify(pin)) {
-      setPin('');
-      setError('');
-      onClose();
-    } else {
-      setError('Incorrect PIN. Try again.');
-      setShake(true);
-      setTimeout(() => setShake(false), 500);
-      setPin('');
+    setVerifying(true);
+    try {
+      const valid = await onVerify(pin);
+      if (valid) {
+        setPin('');
+        setError('');
+        onClose();
+      } else {
+        setError('Incorrect PIN. Try again.');
+        setShake(true);
+        setTimeout(() => setShake(false), 500);
+        setPin('');
+      }
+    } catch {
+      setError('Verification failed. Try again.');
+    } finally {
+      setVerifying(false);
     }
   };
 
@@ -66,7 +75,7 @@ export default function AdminPinModal({ isOpen, onClose, onVerify }) {
             </button>
             <button
               type="submit"
-              disabled={pin.length < 4}
+              disabled={pin.length < 4 || verifying}
               className="rounded-xl bg-gradient-to-r from-brand-500 to-brand-600 px-5 py-2.5 text-sm font-medium text-white transition-smooth hover:from-brand-600 hover:to-brand-700 shadow-md shadow-brand-500/20 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:from-brand-500 disabled:hover:to-brand-600"
             >
               Verify
