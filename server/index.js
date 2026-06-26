@@ -8,7 +8,7 @@ import { appRoutes } from './routes/apps.js';
 import { adminRoutes } from './routes/admin.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const PORT = process.env.PORT || 3001;
+const PORT = process.env.PORT || 3100;
 const isProduction = process.env.NODE_ENV === 'production';
 
 async function start() {
