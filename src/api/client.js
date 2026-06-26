@@ -15,7 +15,10 @@ export function clearAdminToken() {
 }
 
 async function request(method, url, body = null) {
-  const headers = { 'Content-Type': 'application/json' };
+  const headers = {};
+  if (body) {
+    headers['Content-Type'] = 'application/json';
+  }
   if (adminToken) {
     headers['Authorization'] = `Bearer ${adminToken}`;
   }
