@@ -16,22 +16,29 @@ export async function appRoutes(app) {
   });
 
   app.post('/api/apps', { preHandler: authMiddleware }, async (request, reply) => {
-    const { name, category, description, desc, url, keywords, icon, logo } = request.body;
-    if (!name || !url) {
-      return reply.status(400).send({ error: 'Name and URL are required' });
+    try {
+      const { name, category, description, desc, url, keywords, icon, logo } = request.body;
+      if (!name || !url) {
+        return reply.status(400).send({ error: 'Name and URL are required' });
+      }
+      const db = getDb();
+      db.run(
+        `INSERT INTO apps (name, category, description, url, keywords, icon, logo) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [name, category || 'General', description || desc || '', url, keywords || '', icon || '', logo || '']
+      );
+      saveDb();
+      const result = db.exec(`SELECT * FROM apps ORDER BY id DESC LIMIT 1`);
+      if (result.length === 0 || result[0].values.length === 0) {
+        return reply.status(500).send({ error: 'Failed to retrieve created app' });
+      }
+      const columns = result[0].columns;
+      const obj = {};
+      columns.forEach((col, i) => { obj[col] = result[0].values[0][i]; });
+      return obj;
+    } catch (err) {
+      console.error('Error creating app:', err.message);
+      return reply.status(500).send({ error: err.message || 'Internal Server Error' });
     }
-    const db = getDb();
-    db.run(
-      `INSERT INTO apps (name, category, description, url, keywords, icon, logo) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [name, category || 'General', description || desc || '', url, keywords || '', icon || '', logo || '']
-    );
-    saveDb();
-    const id = db.exec(`SELECT last_insert_rowid() as id`)[0].values[0][0];
-    const app = db.exec(`SELECT * FROM apps WHERE id = ${id}`)[0];
-    const columns = app.columns;
-    const obj = {};
-    columns.forEach((col, i) => { obj[col] = app.values[0][i]; });
-    return obj;
   });
 
   app.put('/api/apps/:id', { preHandler: authMiddleware }, async (request, reply) => {
